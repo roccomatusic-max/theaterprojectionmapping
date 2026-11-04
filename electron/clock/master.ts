@@ -14,6 +14,7 @@ import { EventEmitter } from 'node:events';
 import { localNow, type Now } from './time';
 import { showTimeAt, type ShowState, type SyncState as SyncStatus } from '../../src/shared/clock';
 import type { ClockMsg } from './protocol';
+import { compareWalls, type PlaybackReport, type WallSyncSummary } from '../../src/shared/clock-playback';
 
 export type SendFn = (msg: ClockMsg) => void;
 
@@ -34,6 +35,8 @@ export interface NodeInfo {
   error: number;
   status: SyncStatus;
   lastSeen: number;
+  /** What the wall last said it is showing. */
+  playback: PlaybackReport[];
 }
 
 export interface MasterSnapshot {
@@ -41,6 +44,7 @@ export interface MasterSnapshot {
   showTime: number;
   show: ShowState;
   nodes: NodeInfo[];
+  walls: WallSyncSummary;
 }
 
 interface NodeEntry {
@@ -52,6 +56,7 @@ export class MasterClock extends EventEmitter {
   private nodes = new Map<string, NodeEntry>();
   private show: ShowState = { running: false, startedAt: 0, pausedAt: 0, version: 0, session: randomUUID() };
   private readonly opts: Required<MasterOptions>;
+  private expected: Record<string, string[]> | undefined;
 
   constructor(opts: MasterOptions = {}) {
     super();
@@ -82,6 +87,7 @@ export class MasterClock extends EventEmitter {
         error: msg.report?.error ?? Infinity,
         status: msg.report?.status ?? 'syncing',
         lastSeen: t1,
+        playback: Array.isArray(msg.playback) ? msg.playback : [],
       },
     });
     if (isNew) this.emit('node', nodeId);
@@ -149,8 +155,29 @@ export class MasterClock extends EventEmitter {
       .sort((a, b) => a.name.localeCompare(b.name));
   }
 
+  /**
+   * Optional: for each live layer key, the walls it should be on (from the cue).
+   * Lets the operator see a wall that never showed a cue at all.
+   */
+  setExpectedLayers(expected: Record<string, string[]>): void {
+    this.expected = expected;
+  }
+
+  /** Are the walls showing the same thing at the same moment? */
+  wallSync(now = this.now()): WallSyncSummary {
+    // A lost wall's last report is stale; it shows up as lost in the node table instead.
+    const live = this.getNodes().filter((n) => n.status !== 'lost');
+    return compareWalls(live.flatMap((n) => n.playback), now, this.expected);
+  }
+
   snapshot(): MasterSnapshot {
     const masterTime = this.now();
-    return { masterTime, showTime: showTimeAt(this.show, masterTime), show: this.show, nodes: this.getNodes() };
+    return {
+      masterTime,
+      showTime: showTimeAt(this.show, masterTime),
+      show: this.show,
+      nodes: this.getNodes(),
+      walls: this.wallSync(masterTime),
+    };
   }
 }
