@@ -57,6 +57,7 @@ export class MasterClock extends EventEmitter {
   private show: ShowState = { running: false, startedAt: 0, pausedAt: 0, version: 0, session: randomUUID() };
   private readonly opts: Required<MasterOptions>;
   private expected: Record<string, string[]> | undefined;
+  private localPlayback: PlaybackReport[] = [];
 
   constructor(opts: MasterOptions = {}) {
     super();
@@ -163,11 +164,19 @@ export class MasterClock extends EventEmitter {
     this.expected = expected;
   }
 
+  /**
+   * What outputs running on the operator computer itself are showing. They are
+   * compared with the wall computers' reports just like any other wall.
+   */
+  reportLocalPlayback(reports: PlaybackReport[]): void {
+    this.localPlayback = Array.isArray(reports) ? reports : [];
+  }
+
   /** Are the walls showing the same thing at the same moment? */
   wallSync(now = this.now()): WallSyncSummary {
     // A lost wall's last report is stale; it shows up as lost in the node table instead.
     const live = this.getNodes().filter((n) => n.status !== 'lost');
-    return compareWalls(live.flatMap((n) => n.playback), now, this.expected);
+    return compareWalls([...this.localPlayback, ...live.flatMap((n) => n.playback)], now, this.expected);
   }
 
   snapshot(): MasterSnapshot {

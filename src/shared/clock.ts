@@ -101,6 +101,8 @@ export interface ShowClock {
   reportPlayback?(reports: PlaybackReport[]): void;
   /** Operator: for each live layer key, the walls its cue targets, so a wall that missed a cue is flagged. */
   setExpectedLayers?(expected: Record<string, string[]>): void;
+  /** Operator: what outputs on the operator computer itself are showing, compared with the walls' reports. */
+  reportLocalPlayback?(reports: PlaybackReport[]): void;
   dispose?(): void;
 }
 
