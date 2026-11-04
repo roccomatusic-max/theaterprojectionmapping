@@ -12,6 +12,7 @@ import { compile, deleteTarget, hexToRgb, makeTarget, makeTexture, Target } from
 import { drawTestPattern } from "./patterns";
 import { buildRenderMesh } from "../shared/warp";
 import { layerOpacity, standbyMedia, videoTimeAt } from "../shared/cueEngine";
+import { VideoFollower, type PlaybackReport } from "../shared/clock-playback";
 import type { Layer, Media, OutputConfig, PlaybackState, Show, TestPattern } from "../shared/types";
 
 declare global {
@@ -247,6 +248,10 @@ function createMedia(m: Media, owner: string): MediaEl {
 }
 
 function releaseMedia(e: MediaEl): void {
+  if (e.owner) {
+    followers.delete(e.owner);
+    shownAt.delete(e.owner);
+  }
   const i = pool.indexOf(e);
   if (i >= 0) pool.splice(i, 1);
   if (e.el instanceof HTMLVideoElement) {
@@ -277,6 +282,8 @@ function gcMedia(layers: Layer[]): void {
     if (p.owner && !liveKeys.has(p.owner)) {
       // Layer finished: keep it as a preload if the standby cue wants the same file.
       if (wantPreload.some((m) => m.file === p.file) && !pool.some((q) => q !== p && q.owner === "" && q.file === p.file)) {
+        followers.delete(p.owner);
+        shownAt.delete(p.owner);
         p.owner = "";
         if (p.el instanceof HTMLVideoElement) {
           p.el.pause();
@@ -291,41 +298,46 @@ function gcMedia(layers: Layer[]): void {
   }
 }
 
-/** Keep a video on the master timeline: start on time, then nudge the speed or seek. */
+const followers = new Map<string, VideoFollower>();
+/** Master time each layer first became visible on this output (for the wall-sync check). */
+const shownAt = new Map<string, number>();
+
+/** Keep a video on the master timeline (see VideoFollower). Returns whether to draw it. */
 function syncVideo(v: HTMLVideoElement, layer: Layer, now: number): boolean {
-  if (now < layer.startAt) {
-    if (!v.paused) v.pause();
-    if (v.currentTime !== 0 && v.readyState >= 1) v.currentTime = 0;
-    return false;
+  let f = followers.get(layer.key);
+  if (!f) {
+    f = new VideoFollower(v, { startAt: layer.startAt, playMode: layer.playMode });
+    followers.set(layer.key, f);
   }
-  const dur = v.duration;
-  const target = videoTimeAt(layer, now, dur);
-  if (!target.visible) {
-    if (!v.paused) v.pause();
-    return false;
+  f.update(now);
+  if (now < layer.startAt) return false;
+  worstDriftMs = Math.max(worstDriftMs, Math.abs(f.driftMs));
+  // "Play once" goes black at the end; loop and hold keep showing.
+  return videoTimeAt(layer, now, v.duration).visible;
+}
+
+/** What this output is showing right now, for the operator's wall-sync check. */
+function playbackReports(now: number): PlaybackReport[] {
+  if (!out || !show || !state || state.blackout) return [];
+  const reports: PlaybackReport[] = [];
+  for (const layer of state.walls[out.wall] ?? []) {
+    if (layer.fadeOutAt !== null) continue;
+    const m = pool.find((p) => p.owner === layer.key);
+    const f = followers.get(layer.key);
+    reports.push({
+      key: layer.key,
+      cueId: layer.cueId,
+      cueNumber: show.cues.find((c) => c.id === layer.cueId)?.number,
+      wall: out.wall,
+      mediaType: layer.media.type,
+      startAt: layer.startAt,
+      shownAt: shownAt.get(layer.key) ?? null,
+      sampledAt: now,
+      ...(f ? f.report() : {}),
+      ...(m?.failed ? { error: `could not load ${m.file}` } : {}),
+    });
   }
-  if (target.ended) {
-    if (!v.paused) v.pause();
-    if (Math.abs(v.currentTime - target.time) > 0.1) v.currentTime = target.time;
-    return true;
-  }
-  let err = v.currentTime - target.time;
-  if (layer.playMode === "loop" && isFinite(dur) && dur > 0) {
-    if (err > dur / 2) err -= dur;
-    if (err < -dur / 2) err += dur;
-  }
-  worstDriftMs = Math.max(worstDriftMs, Math.abs(err) * 1000);
-  if (v.paused) {
-    v.currentTime = target.time;
-    v.play().catch(() => undefined);
-  } else if (Math.abs(err) > 0.25) {
-    v.currentTime = target.time + 0.03;
-    v.playbackRate = 1;
-  } else {
-    // Ahead => slow down a little, behind => speed up a little. Inaudible, invisible.
-    v.playbackRate = 1 - Math.max(-0.08, Math.min(0.08, err * 1.5));
-  }
-  return true;
+  return reports;
 }
 
 // ---------------------------------------------------------------------------
@@ -399,6 +411,7 @@ function renderContent(now: number, pattern: TestPattern | null): void {
       gl.uniform3fv(uColor, hexToRgb(layer.media.color));
       gl.uniform1f(uOpacity, op);
       drawQuad(0, 0, 1, 1);
+      if (op > 0 && !shownAt.has(layer.key)) shownAt.set(layer.key, now);
       continue;
     }
     if (layer.media.type !== "video" && layer.media.type !== "image") continue;
@@ -424,6 +437,7 @@ function renderContent(now: number, pattern: TestPattern | null): void {
     gl.uniform1f(uUseTex, 1);
     gl.uniform1f(uOpacity, op);
     drawQuad((fx0 - s.x0) / sw, (fy0 - s.y0) / sh, (fx1 - s.x0) / sw, (fy1 - s.y0) / sh);
+    if (!shownAt.has(layer.key)) shownAt.set(layer.key, now);
   }
   gl.disable(gl.BLEND);
 }
@@ -526,6 +540,8 @@ setInterval(() => {
   frames = 0;
   worstDriftMs = 0;
 }, 1000);
+
+setInterval(() => window.api.send("output:playback", playbackReports(masterNow())), 250);
 
 canvas.addEventListener("webglcontextlost", (e) => {
   e.preventDefault();

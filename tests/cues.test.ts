@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { back, fireCue, go, initialPlayback, layerOpacity, panic, prune, setStandby, standbyMedia, videoTimeAt } from "../src/shared/cueEngine";
+import { back, expectedLayers, fireCue, go, initialPlayback, layerOpacity, panic, prune, setStandby, standbyMedia, videoTimeAt } from "../src/shared/cueEngine";
 import { emptyShow } from "../src/shared/defaults";
 import type { Show } from "../src/shared/types";
 
@@ -78,6 +78,13 @@ describe("cue engine", () => {
     expect(standbyMedia(st, s)).toEqual([{ type: "video", file: "scene.mp4" }]);
     st = setStandby(st, s, 2);
     expect(standbyMedia(st, s)).toEqual([]);
+  });
+
+  it("one firing shares its layer key across walls so the walls can be compared", () => {
+    const s = show();
+    const st = go(initialPlayback(), s, 0);
+    expect(st.walls.left[0].key).toBe(st.walls.right[0].key);
+    expect(expectedLayers(st)).toEqual({ [st.walls.left[0].key]: ["left", "right"] });
   });
 
   it("re-firing a cue creates a new layer key so video restarts", () => {

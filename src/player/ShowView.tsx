@@ -19,7 +19,8 @@ export function ShowView(props: {
 }) {
   const { show, setShow, state, status, locked } = props;
   const [selId, setSelId] = useState<string | null>(show.cues[0]?.id ?? null);
-  const selIndex = show.cues.findIndex((c) => c.id === selId);
+  const found = show.cues.findIndex((c) => c.id === selId);
+  const selIndex = found >= 0 ? found : show.cues.length ? 0 : -1;
   const sel = show.cues[selIndex];
 
   // Hotkeys: Space = GO, Backspace = Back, Esc = Panic (blackout).
@@ -147,7 +148,7 @@ export function ShowView(props: {
               {show.cues.map((c, i) => (
                 <tr
                   key={c.id}
-                  className={[c.id === selId ? "sel" : "", i === state.standbyIndex ? "standby" : "", i === state.currentIndex ? "live" : ""].join(" ")}
+                  className={[i === selIndex ? "sel" : "", i === state.standbyIndex ? "standby" : "", i === state.currentIndex ? "live" : ""].join(" ")}
                   onClick={() => setSelId(c.id)}
                   onDoubleClick={() => api.standby(i)}
                 >
@@ -177,7 +178,7 @@ export function ShowView(props: {
         {sel && <CueEditor cue={sel} upCue={(p) => upCue(sel.id, p)} locked={locked} />}
       </div>
 
-      <div className="content" style={{ flex: 1, borderLeft: "1px solid var(--line)" }}>
+      <div className="content" style={{ flex: 1, minWidth: 560, borderLeft: "1px solid var(--line)" }}>
         <ClockPanel status={props.clock} now={Date.now()} onCommand={(c) => api.clockCommand(c)} />
         <div className="panel">
           <div className="muted">Next (standby)</div>

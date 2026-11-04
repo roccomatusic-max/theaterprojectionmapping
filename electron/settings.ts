@@ -23,7 +23,9 @@ function settingsPath(): string {
 export function defaultSettings(): Settings {
   return {
     role: "operator",
-    mediaFolder: path.join(app.getPath("documents"), "Matilda Projection Media"),
+    mediaFolder: process.env.MATILDA_USER_DATA
+      ? path.join(app.getPath("userData"), "media")
+      : path.join(app.getPath("documents"), "Matilda Projection Media"),
     nodeName: os.hostname(),
     nodePort: DEFAULT_NODE_PORT,
     showPath: path.join(app.getPath("userData"), "show.json"),

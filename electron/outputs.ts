@@ -8,6 +8,7 @@
 import { BrowserWindow, ipcMain, screen } from "electron";
 import path from "node:path";
 import type { DisplayInfo, OutputConfig, OutputStatus, PlaybackState, Show } from "../src/shared/types";
+import type { PlaybackReport } from "../src/shared/clock-playback";
 
 /** displayId value meaning "open as a normal window on this screen" (rehearsing without projectors). */
 export const WINDOWED_DISPLAY_ID = -1;
@@ -30,6 +31,7 @@ interface OutWin {
   displayId: number;
   status: OutputStatus;
   ready: boolean;
+  playback: PlaybackReport[];
 }
 
 export class OutputManager {
@@ -43,6 +45,9 @@ export class OutputManager {
   constructor(private readonly distDir: string, private readonly preload: string) {
     ipcMain.on("output:status", (e, st: OutputStatus) => {
       for (const w of this.wins.values()) if (w.win.webContents.id === e.sender.id) w.status = { ...st, open: true };
+    });
+    ipcMain.on("output:playback", (e, reports: PlaybackReport[]) => {
+      for (const w of this.wins.values()) if (w.win.webContents.id === e.sender.id) w.playback = Array.isArray(reports) ? reports : [];
     });
     ipcMain.on("output:ready", (e) => {
       for (const w of this.wins.values())
@@ -83,6 +88,20 @@ export class OutputManager {
           : { outputId: o.id, fps: 0, droppedFrames: 0, missingMedia: [], open: false, driftMs: 0 },
       );
     }
+    return out;
+  }
+
+  /** What this computer's outputs are showing (one report per layer and wall). */
+  playbackReports(): PlaybackReport[] {
+    const seen = new Set<string>();
+    const out: PlaybackReport[] = [];
+    for (const w of this.wins.values())
+      for (const r of w.playback) {
+        const k = `${r.key}|${r.wall}`;
+        if (seen.has(k)) continue;
+        seen.add(k);
+        out.push(r);
+      }
     return out;
   }
 
@@ -203,6 +222,7 @@ export class OutputManager {
       config,
       displayId: display ? display.id : WINDOWED_DISPLAY_ID,
       ready: false,
+      playback: [],
       status: { outputId: config.id, fps: 0, droppedFrames: 0, missingMedia: [], open: true, driftMs: 0 },
     });
   }

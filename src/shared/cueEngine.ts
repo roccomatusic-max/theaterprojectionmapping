@@ -28,11 +28,13 @@ export function fireCue(state: PlaybackState, show: Show, index: number, at: num
   const cue = show.cues[index];
   if (!cue) return state;
   const walls = cloneWalls(state);
+  // One key per firing, shared by every wall, so the walls can be compared.
+  const layer = layerFor(cue, at);
   for (const w of cue.walls) {
     walls[w] = walls[w].map((l) =>
       l.fadeOutAt === null ? { ...l, fadeOutAt: at, fadeOutMs: Math.max(0, cue.fadeOut) * 1000 } : l,
     );
-    if (cue.media.type !== "black") walls[w].push(layerFor(cue, at));
+    if (cue.media.type !== "black") walls[w].push({ ...layer, media: { ...layer.media } });
   }
   return {
     ...state,
@@ -134,6 +136,15 @@ export function videoTimeAt(l: Layer, t: number, duration: number): { time: numb
         ? { time: Math.max(0, duration - 0.05), visible: true, ended: true }
         : { time: elapsed, visible: true, ended: false };
   }
+}
+
+/** For the wall-sync check: each live layer key and the walls it should be on. */
+export function expectedLayers(state: PlaybackState): Record<string, string[]> {
+  const out: Record<string, string[]> = {};
+  if (state.blackout) return out;
+  for (const w of WALL_IDS)
+    for (const l of state.walls[w]) if (l.fadeOutAt === null) (out[l.key] ??= []).push(w);
+  return out;
 }
 
 /** Media that the standby cue needs, so outputs can preload it. */

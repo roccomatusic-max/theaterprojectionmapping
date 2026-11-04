@@ -10,11 +10,11 @@ import { app, BrowserWindow, dialog, ipcMain, Menu, shell } from "electron";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import type { ClockCommand, ShowClock } from "../src/shared/clock";
+import type { ClockCommand } from "../src/shared/clock";
 import { CUE_LEAD_MS } from "../src/shared/clock";
-import { back, fadeAll, fireCue, go, initialPlayback, panic, prune, setStandby } from "../src/shared/cueEngine";
+import { back, expectedLayers, fadeAll, fireCue, go, initialPlayback, panic, prune, setStandby } from "../src/shared/cueEngine";
 import type { NodeStatus, OutputStatus, PlaybackState, Plan, Show, TestPattern } from "../src/shared/types";
-import { createMasterClock, FollowerShowClock } from "./clock";
+import { FollowerShowClock, MasterShowClock } from "./clock";
 import { importMedia, IMAGE_EXT, mediaBaseUrl, mediaTypeOf, missingMedia, VIDEO_EXT } from "./media";
 import { listen, Link, Msg, NodeConnection } from "./net/link";
 import { OscListener } from "./osc";
@@ -32,6 +32,8 @@ const argRole = process.argv.includes("--node") ? "node" : process.argv.includes
 if (argRole === "node" && process.argv.includes("--separate-profile")) {
   app.setPath("userData", app.getPath("userData") + "-node");
 }
+// For automated tests: keep everything in a throwaway folder.
+if (process.env.MATILDA_USER_DATA) app.setPath("userData", process.env.MATILDA_USER_DATA);
 
 if (!app.requestSingleInstanceLock()) {
   app.quit();
@@ -90,7 +92,7 @@ function commonIpc(getWin: () => BrowserWindow | null, onMediaFolderChanged: () 
 function startOperator(): void {
   const settings = loadSettings();
   const store = new ShowStore(settings.showPath);
-  const clock: ShowClock = createMasterClock();
+  const clock = new MasterShowClock();
   const outputs = new OutputManager(DIST, PRELOAD);
   let playback: PlaybackState = initialPlayback();
   let showMode = false;
@@ -151,6 +153,7 @@ function startOperator(): void {
   }
 
   function pushState(): void {
+    clock.setExpectedLayers(expectedLayers(playback));
     outputs.setState(playback);
     for (const n of nodes.values()) n.conn.send({ type: "state", state: playback });
     ui("state", playback);
@@ -401,6 +404,8 @@ function startOperator(): void {
 
   // ---- timers -------------------------------------------------------------
   setInterval(() => {
+    // Outputs on the booth computer itself report straight to the master clock.
+    (clock as unknown as { reportLocalPlayback?: (r: unknown[]) => void }).reportLocalPlayback?.(outputs.playbackReports());
     ui("clockStatus", clock.status());
     outputs.setClockOffset(clock.now() - Date.now());
   }, 250);
@@ -521,7 +526,10 @@ function startNode(): void {
     };
   }
 
-  setInterval(() => outputs.setClockOffset(clock.now() - Date.now()), 250);
+  setInterval(() => {
+    outputs.setClockOffset(clock.now() - Date.now());
+    clock.reportPlayback(outputs.playbackReports());
+  }, 250);
   setInterval(async () => {
     link?.send(statusMsg("status"));
     if (link) link.send({ type: "thumbs", thumbs: await outputs.thumbnails(240) });
