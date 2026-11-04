@@ -405,7 +405,7 @@ function startOperator(): void {
   // ---- timers -------------------------------------------------------------
   setInterval(() => {
     // Outputs on the booth computer itself report straight to the master clock.
-    (clock as unknown as { reportLocalPlayback?: (r: unknown[]) => void }).reportLocalPlayback?.(outputs.playbackReports());
+    clock.reportLocalPlayback(outputs.playbackReports());
     ui("clockStatus", clock.status());
     outputs.setClockOffset(clock.now() - Date.now());
   }, 250);

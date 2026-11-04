@@ -94,7 +94,11 @@ export function ShowView(props: {
   if (anyTest) alerts.push({ bad: false, text: "A test pattern is showing on at least one output." });
 
   return (
-    <div className="main">
+    <div className="main" style={{ flexDirection: "column" }}>
+      <div style={{ padding: "10px 12px 0", overflowX: "auto" }}>
+        <ClockPanel status={props.clock} now={Date.now()} onCommand={(c) => api.clockCommand(c)} />
+      </div>
+      <div style={{ display: "flex", flex: 1, minHeight: 0 }}>
       <div className="content" style={{ flex: 1.4 }}>
         <div className="hstack">
           <b>Cue list</b>
@@ -178,8 +182,7 @@ export function ShowView(props: {
         {sel && <CueEditor cue={sel} upCue={(p) => upCue(sel.id, p)} locked={locked} />}
       </div>
 
-      <div className="content" style={{ flex: 1, minWidth: 560, borderLeft: "1px solid var(--line)" }}>
-        <ClockPanel status={props.clock} now={Date.now()} onCommand={(c) => api.clockCommand(c)} />
+      <div className="content" style={{ flex: 1, minWidth: 440, borderLeft: "1px solid var(--line)" }}>
         <div className="panel">
           <div className="muted">Next (standby)</div>
           <div style={{ fontSize: 18, fontWeight: 700, minHeight: 26 }}>{standby ? `${standby.number} · ${standby.name}` : "End of cue list"}</div>
@@ -233,6 +236,7 @@ export function ShowView(props: {
             );
           })}
         </div>
+      </div>
       </div>
     </div>
   );
