@@ -218,7 +218,7 @@ export interface Cue {
   fit: Fit;
   /** Seconds. */
   fadeIn: number;
-  /** Seconds. How long this cue's content takes to fade when something replaces it. */
+  /** Seconds. How long the content this cue replaces (on its walls) takes to fade out. */
   fadeOut: number;
   autoFollow: boolean;
   /** Seconds after this cue fires before the next cue fires (when autoFollow). */
@@ -270,10 +270,10 @@ export interface PlaybackState {
   currentIndex: number;
   /** Index of the cue that GO will fire next. */
   standbyIndex: number;
-  /** Master-clock ms of the last panic, outputs are black while blackoutAt is set. */
+  /** Panic/blackout: every output is forced to black until the next GO. */
   blackout: boolean;
+  /** Test pattern per output id (null = show content). */
   testPatterns: Record<string, TestPattern | null>;
-  /** Per-output "show blend/masks on test pattern". */
 }
 
 export interface DisplayInfo {
