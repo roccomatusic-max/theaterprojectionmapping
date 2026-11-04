@@ -197,4 +197,28 @@ describe("walls report to the booth", () => {
   });
 });
 
+describe("outputs on the booth computer", () => {
+  it("are compared with a wall computer like any other wall", () => {
+    const master = new MasterShowClock();
+    const now = master.now();
+    const r = (wall: string, shownAt: number): PlaybackReport => ({
+      key: "k3", cueId: "c3", cueNumber: "3", wall, mediaType: "image", startAt: now - 500, shownAt, sampledAt: now,
+    });
+    master.setExpectedLayers({ k3: ["left", "right"] });
+    // The right wall computer's ping carries its report.
+    master.handleMessage(
+      { type: "clock.ping", name: "Right wall", seq: 1, t0: now, playback: [r("right", now - 490)] } as ClockMsg,
+      () => {},
+      "right",
+    );
+    // Without the booth's own output the left wall looks missing...
+    expect(master.status().walls!.issues[0].text).toBe("Left wall is not showing it");
+    // ...and with it, both walls are matched.
+    master.reportLocalPlayback([r("left", now - 500)]);
+    const w = master.status().walls!;
+    expect(w.state).toBe("in-step");
+    expect(w.worstMs).toBe(10);
+  });
+});
+
 const IN_STEP = 34;

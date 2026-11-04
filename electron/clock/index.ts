@@ -74,6 +74,10 @@ export class MasterShowClock implements ShowClock {
     this.master.setExpectedLayers(expected);
   }
 
+  reportLocalPlayback(reports: PlaybackReport[]): void {
+    this.master.reportLocalPlayback(reports);
+  }
+
   command(cmd: ClockCommand): void {
     if (cmd.type === "play") this.master.play();
     else if (cmd.type === "pause") this.master.pause();
