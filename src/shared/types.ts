@@ -158,8 +158,10 @@ export interface MaskPolygon {
   id: string;
   name: string;
   points: Vec2[];
-  /** Came from a Planner obstruction: drawn in red and cannot be deleted while show mode is on. */
+  /** Came from a Planner obstruction (re-created on every import from the Planner). */
   fromObstruction?: string;
+  /** "Never project here" (exit signs): cannot be switched off. */
+  locked?: boolean;
   enabled: boolean;
 }
 

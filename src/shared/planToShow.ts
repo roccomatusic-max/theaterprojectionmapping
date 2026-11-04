@@ -33,6 +33,7 @@ export function planToShow(plan: Plan, show: Show): { show: Show; warnings: stri
         name: `${o.label} (${o.kind})`,
         points: rectPoly({ x0: r.x0 - m, y0: r.y0 - m, x1: r.x1 + m, y1: r.y1 + m }),
         fromObstruction: o.id,
+        locked: o.neverProject,
         enabled: true,
       });
     }
