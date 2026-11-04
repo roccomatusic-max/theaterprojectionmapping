@@ -15,6 +15,7 @@ import { OffsetEstimator, type EstimatorOptions } from './estimator';
 import { showTimeAt, type ShowState, type SyncState as SyncStatus } from '../../src/shared/clock';
 import type { ClockMsg } from './protocol';
 import type { SendFn } from './master';
+import type { PlaybackReport } from '../../src/shared/clock-playback';
 
 export interface FollowerOptions {
   name?: string;
@@ -47,6 +48,7 @@ export class FollowerClock extends EventEmitter {
   private sentAt = new Map<number, number>();
   private lastReply: number | null = null;
   private pingsSent = 0;
+  private playback: PlaybackReport[] = [];
   private show: ShowState = { running: false, startedAt: 0, pausedAt: 0, version: -1, session: '' };
   readonly estimator: OffsetEstimator;
   private readonly opts: Required<Omit<FollowerOptions, 'estimator'>>;
@@ -110,10 +112,20 @@ export class FollowerClock extends EventEmitter {
           error: this.estimator.error,
           status: this.status(),
         },
+        playback: this.playback,
       });
     } catch {
       /* link is going down; detach() will follow */
     }
+  }
+
+  /**
+   * What this wall is showing right now, one entry per live layer. Call it
+   * whenever that changes, and every few hundred ms while video plays. It goes
+   * to the operator with the next ping.
+   */
+  reportPlayback(reports: PlaybackReport[]): void {
+    this.playback = reports;
   }
 
   /** Hand every "clock." message from the operator to this, as soon as it is parsed. */

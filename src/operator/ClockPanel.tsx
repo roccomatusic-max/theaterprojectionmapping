@@ -9,7 +9,14 @@
 //  - now: local time, kept for compatibility; the panel animates on its own.
 //  - onCommand: sends play / pause / reset / seek to clock.command() in main.
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
-import { formatTimecode, type ClockCommand, type ClockNodeStatus, type ClockStatus, type SyncState } from "../shared/clock";
+import {
+  formatTimecode,
+  type ClockCommand,
+  type ClockNodeStatus,
+  type ClockStatus,
+  type SyncState,
+  type WallSyncSummary,
+} from "../shared/clock";
 
 const STATE_LABEL: Record<SyncState, string> = { locked: "Locked", syncing: "Syncing", lost: "Lost" };
 const STATE_COLOR: Record<SyncState, string> = { locked: "#2fbf71", syncing: "#e0a526", lost: "#e5484d" };
@@ -49,13 +56,42 @@ function Pill({ state, children }: { state: SyncState; children?: ReactNode }) {
   );
 }
 
+const WALLS_PILL: Record<WallSyncSummary["state"], { state: SyncState; text: string }> = {
+  idle: { state: "syncing", text: "Nothing on the walls" },
+  "in-step": { state: "locked", text: "Walls in step" },
+  drifting: { state: "syncing", text: "Walls drifting" },
+  "out-of-step": { state: "lost", text: "Walls out of step" },
+};
+
+/** Are both walls showing the same thing at the same moment? */
+function WallsInStep({ walls }: { walls: WallSyncSummary }) {
+  const pill = WALLS_PILL[walls.state];
+  return (
+    <div style={s.walls}>
+      <div style={s.wallsRow}>
+        <Pill state={pill.state}>{pill.text}</Pill>
+        {walls.compared > 0 && (
+          <span style={s.muted}>
+            {walls.worstMs < 1 ? "under 1 ms apart" : `${Math.round(walls.worstMs)} ms apart`}
+          </span>
+        )}
+      </div>
+      {walls.issues.slice(0, 3).map((i) => (
+        <div key={i.key + i.text} style={{ ...s.issue, color: STATE_COLOR[WALLS_PILL[i.state].state] }}>
+          Cue {i.cue}: {i.text}
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function summary(nodes: ClockNodeStatus[]): { state: SyncState; text: string } {
   if (!nodes.length) return { state: "syncing", text: "No wall computers connected" };
   const lost = nodes.filter((n) => n.state === "lost");
   const syncing = nodes.filter((n) => n.state === "syncing");
   if (lost.length) return { state: "lost", text: `${lost.map((n) => n.name).join(", ")} not responding` };
   if (syncing.length) return { state: "syncing", text: `${syncing.map((n) => n.name).join(", ")} still syncing` };
-  return { state: "locked", text: `All ${nodes.length} wall computer${nodes.length === 1 ? "" : "s"} in sync` };
+  return { state: "locked", text: `${nodes.length === 1 ? "Wall clock" : `All ${nodes.length} wall clocks`} locked` };
 }
 
 export function ClockPanel(props: {
@@ -108,6 +144,8 @@ export function ClockPanel(props: {
           </button>
         </div>
       )}
+
+      {isMaster && status?.walls && <WallsInStep walls={status.walls} />}
 
       {isMaster ? (
         <table style={s.table}>
@@ -177,5 +215,9 @@ const s: Record<string, CSSProperties> = {
   td: { padding: "6px 8px 6px 0", borderBottom: "1px solid #1e2430", fontVariantNumeric: "tabular-nums" },
   pill: { display: "inline-flex", alignItems: "center", gap: 6, border: "1px solid", borderRadius: 999, padding: "1px 9px", fontSize: 12, fontWeight: 600 },
   dot: { width: 7, height: 7, borderRadius: "50%" },
+  walls: { margin: "4px 0 10px", display: "flex", flexDirection: "column", gap: 4 },
+  wallsRow: { display: "flex", alignItems: "center", gap: 10 },
+  muted: { fontSize: 13, color: "#9aa3b2" },
+  issue: { fontSize: 13, paddingLeft: 2 },
   followerInfo: { fontSize: 13, color: "#9aa3b2", marginTop: 6 },
 };

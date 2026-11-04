@@ -14,6 +14,9 @@
 // This file is shared by the Electron main process and the React UI, so it must
 // stay free of Node imports.
 
+import type { PlaybackReport, WallSyncSummary } from "./clock-playback";
+export * from "./clock-playback";
+
 export type SyncState = "locked" | "syncing" | "lost";
 
 /**
@@ -45,6 +48,8 @@ export interface ClockNodeStatus {
   errorMs: number;
   /** Master time of the last ping from this wall. */
   lastSeen: number | null;
+  /** What this wall says it is showing. */
+  playback?: PlaybackReport[];
 }
 
 export interface ClockStatus {
@@ -66,6 +71,8 @@ export interface ClockStatus {
   show?: ShowState;
   /** Master only: every wall computer that has connected. */
   nodes?: ClockNodeStatus[];
+  /** Master only: are the walls showing the same thing at the same moment? */
+  walls?: WallSyncSummary;
 }
 
 export type ClockCommand =
@@ -90,6 +97,10 @@ export interface ShowClock {
   attach?(send: (msg: object) => void): void;
   /** Follower: the link to the operator dropped. */
   detach?(): void;
+  /** Follower: what this wall is showing now (one entry per live layer). Sent to the operator with each ping. */
+  reportPlayback?(reports: PlaybackReport[]): void;
+  /** Operator: for each live layer key, the walls its cue targets, so a wall that missed a cue is flagged. */
+  setExpectedLayers?(expected: Record<string, string[]>): void;
   dispose?(): void;
 }
 

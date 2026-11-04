@@ -12,9 +12,13 @@
 //    clock.status(), and sends each output window the master-minus-local offset
 //    (clock.now() - Date.now()) so video playback follows the master timeline.
 //  - The operator UI's play / pause / reset / seek buttons go to clock.command(cmd).
+//  - Keeping walls in step (see src/shared/clock-playback.ts): each wall's output
+//    drives video with VideoFollower and calls clock.reportPlayback(reports) with
+//    what it is showing; the operator calls clock.setExpectedLayers({layerKey: walls})
+//    when layers change, and status().walls says whether the walls match.
 
 import os from "node:os";
-import type { ClockCommand, ClockStatus, ShowClock } from "../../src/shared/clock";
+import type { ClockCommand, ClockStatus, PlaybackReport, ShowClock } from "../../src/shared/clock";
 import { FollowerClock, type FollowerOptions } from "./follower";
 import { MasterClock, type MasterOptions } from "./master";
 import { isClockMsg } from "./protocol";
@@ -60,8 +64,14 @@ export class MasterShowClock implements ShowClock {
         rttMs: n.rtt,
         errorMs: n.error,
         lastSeen: Number.isFinite(n.lastSeen) ? n.lastSeen : null,
+        playback: n.playback,
       })),
+      walls: snap.walls,
     };
+  }
+
+  setExpectedLayers(expected: Record<string, string[]>): void {
+    this.master.setExpectedLayers(expected);
   }
 
   command(cmd: ClockCommand): void {
@@ -114,6 +124,10 @@ export class FollowerShowClock implements ShowClock {
 
   handleMessage(msg: { type: string }): void {
     if (isClockMsg(msg)) this.follower.receive(msg);
+  }
+
+  reportPlayback(reports: PlaybackReport[]): void {
+    this.follower.reportPlayback(reports);
   }
 
   attach(send: (msg: object) => void): void {

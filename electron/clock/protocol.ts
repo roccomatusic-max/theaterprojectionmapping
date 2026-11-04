@@ -7,6 +7,7 @@
  *   clock.state  operator -> all walls, pushed on play / pause / reset / seek
  */
 import type { ShowState, SyncState } from "../../src/shared/clock";
+import type { PlaybackReport } from "../../src/shared/clock-playback";
 
 export interface PingMsg {
   type: "clock.ping";
@@ -16,6 +17,8 @@ export interface PingMsg {
   t0: number;
   /** Wall's current sync quality, for the operator display. */
   report?: { offset: number; rtt: number; error: number; status: SyncState };
+  /** What the wall is showing right now, one entry per live layer. */
+  playback?: PlaybackReport[];
 }
 
 export interface PongMsg {
